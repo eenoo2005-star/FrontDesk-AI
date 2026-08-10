@@ -1,0 +1,351 @@
+{
+  "name": "02 - WhatsApp Incoming Message",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ee37655f-a0f7-4a5b-95db-68017d273631",
+      "name": "WhatsApp Trigger",
+      "webhookId": "41e4f85a-3ff9-4b3f-a59b-d054ffe135bc",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "sZg7YyxSfvwrc4ml",
+          "name": "WhatsApp OAuth account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "910cfa11-3b7a-4e51-b103-3c08e69389e0",
+              "name": "customer_name",
+              "value": "={{ $json.contacts[0].profile.name }}",
+              "type": "string"
+            },
+            {
+              "id": "61a7d96b-7719-4eb8-b773-cba0fcd5e2c8",
+              "name": "customer_phone",
+              "value": "={{ $json.contacts[0].wa_id }}",
+              "type": "string"
+            },
+            {
+              "id": "1dff50df-10bf-4e05-a692-ec3401c82d49",
+              "name": "message_text",
+              "value": "={{ $json.messages[0].text.body }}",
+              "type": "string"
+            },
+            {
+              "id": "f287d739-0034-4eca-b317-4c081e150cda",
+              "name": "=message_id",
+              "value": "={{ $json.messages[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "196de25d-a68c-44d1-a20f-448aa54a5637",
+              "name": "message_type",
+              "value": "={{ $json.messages[0].type }}",
+              "type": "string"
+            },
+            {
+              "id": "fe784b3b-5602-4445-b48d-d590b2d1c21b",
+              "name": "sender_phone",
+              "value": "={{ $json.messages[0].from }}",
+              "type": "string"
+            },
+            {
+              "id": "78def26e-a7bc-4256-975c-0bc86e0b5b16",
+              "name": "business_phone",
+              "value": "={{ $json.metadata.display_phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "40f43a1b-58d1-4c7e-b3c9-9b774756931a",
+              "name": "phone_number_id",
+              "value": "={{ $json.metadata.phone_number_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "d44985cb-230d-4058-80c3-c7530b4c8bdb",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/incoming-message",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  customer_name: $json.customer_name,\n  customer_phone: $json.customer_phone,\n  message_text: $json.message_text,\n  message_id: $json.message_id,\n  message_type: $json.message_type,\n  phone_number_id: $json.phone_number_id\n} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        400,
+        0
+      ],
+      "id": "07f5773c-b966-47bc-a933-ac1b257e2f83",
+      "name": "Save Customer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: \"qwen3:4b-instruct\",\n\n  stream: false,\n\n  system: `\nYou are the intent extraction engine for FrontDesk AI.\n\nYou understand BOTH Arabic and English.\n\nYour job is only to extract structured appointment data.\nYou never create appointments yourself.\nYou never tell the customer that an appointment is confirmed.\nLaravel handles validation, availability, booking, and the final reply.\n\nReturn the customer's language:\n- \"ar\" for Arabic\n- \"en\" for English\n\nSupported intents:\n- book_appointment\n- reschedule_appointment\n- cancel_appointment\n- faq\n- unknown\n\nIMPORTANT SERVICE NORMALIZATION:\n\nThe database currently uses the canonical service name:\n\n\"تنظيف أسنان\"\n\nIf the customer says any equivalent English phrase such as:\n- teeth cleaning\n- dental cleaning\n- cleaning my teeth\n- tooth cleaning\n\nreturn:\n\nservice_name = \"تنظيف أسنان\"\n\nIf the customer says:\nتنظيف أسنان\n\nalso return:\n\nservice_name = \"تنظيف أسنان\"\n\nNever translate the canonical service_name into English.\n\nCONVERSATION MEMORY:\n\nUse the current message together with conversation_state.\n\nDo not erase valid previous information just because the customer did not repeat it.\n\nExample:\n\nPrevious message:\n\"أريد حجز تنظيف أسنان يوم 15 أغسطس الساعة الرابعة\"\n\nSystem is waiting for requested_time.\n\nCurrent message:\n\"مساءً\"\n\nReturn:\nrequested_time = \"16:00\"\n\nEnglish example:\n\nPrevious message:\n\"I want a teeth cleaning on August 15 at four\"\n\nCurrent message:\n\"PM\"\n\nReturn:\nrequested_time = \"16:00\"\n\nTIME RULES:\n\nIf customer says:\n\"الساعة الرابعة مساءً\"\nreturn 16:00\n\nIf customer says:\n\"4 PM\"\nreturn 16:00\n\nIf customer says only:\n\"الساعة الرابعة\"\nor\n\"at four\"\n\nand there is no AM/PM or morning/evening information,\nreturn requested_time = null.\n\nUse HH:mm.\n\nDATE RULES:\n\nUse YYYY-MM-DD.\n\nUnderstand relative words such as:\n\nArabic:\nاليوم\nغداً\nبعد غد\n\nEnglish:\ntoday\ntomorrow\nthe day after tomorrow\n\nUse the supplied current date.\n\nIf a value is uncertain, return null.\nNever invent missing information.\n`,\n\n  prompt: `\nCurrent date:\n${$now.toISODate()}\n\nPrevious conversation state:\n${JSON.stringify(\n  $('Save Customer').item.json.conversation_state ?? null\n)}\n\nOriginal saved message:\n${JSON.stringify(\n  $('Save Customer').item.json.conversation_state?.context?.original_message ?? null\n)}\n\nField currently expected:\n${$('Save Customer').item.json.conversation_state?.waiting_for ?? 'none'}\n\nCurrent customer message:\n${$('Save Customer').item.json.incoming_message.text}\n\nExtract the structured data.\n`,\n\n  format: {\n    type: \"object\",\n\n    properties: {\n      language: {\n        type: \"string\",\n        enum: [\"ar\", \"en\"]\n      },\n\n      intent: {\n        type: \"string\",\n        enum: [\n          \"book_appointment\",\n          \"reschedule_appointment\",\n          \"cancel_appointment\",\n          \"faq\",\n          \"unknown\"\n        ]\n      },\n\n      service_name: {\n        type: [\"string\", \"null\"]\n      },\n\n      requested_date: {\n        type: [\"string\", \"null\"]\n      },\n\n      requested_time: {\n        type: [\"string\", \"null\"]\n      }\n    },\n\n    required: [\n      \"language\",\n      \"intent\",\n      \"service_name\",\n      \"requested_date\",\n      \"requested_time\"\n    ],\n\n    additionalProperties: false\n  },\n\n  options: {\n    temperature: 0\n  }\n} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        576,
+        0
+      ],
+      "id": "849d3b7d-37eb-4749-af34-c4585e1f4d91",
+      "name": "Classify Intent - Ollama"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/process-intent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  customer_id: Number($json.customer_id),\n  language: $json.language || 'ar',\n  intent: $json.intent,\n  service_name: $json.service_name || null,\n  requested_date: $json.requested_date || null,\n  requested_time: $json.requested_time || null,\n  message_text: $json.message_text\n} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        912,
+        0
+      ],
+      "id": "c58ca6f6-651e-4d80-8642-584734b65e80",
+      "name": "Process Booking"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1265135880021348",
+        "recipientPhoneNumber": "={{ $('Parse AI Result').item.json.customer_phone }}",
+        "textBody": "={{ $json.reply }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        0
+      ],
+      "id": "9ad334c5-2ea4-4ede-970d-131752172b21",
+      "name": "Send WhatsApp Reply",
+      "webhookId": "8e9eac9b-dfe2-4cbf-ac80-6699e722e0cc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "I104K1HRIYfqxK7W",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9e71af5e-3abd-4f8a-8763-3223d52a0712",
+              "name": "customer_id",
+              "value": "={{ $('Save Customer').item.json.customer.id }}",
+              "type": "string"
+            },
+            {
+              "id": "63975844-fb6c-4d69-b4dd-a12182c9ebb1",
+              "name": "customer_phone",
+              "value": "={{ $('Save Customer').item.json.customer.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "f8dc31f5-a5c8-49fa-ade1-aa8581bc60ff",
+              "name": "message_text",
+              "value": "={{ $('Save Customer').item.json.incoming_message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "67b627b8-0686-4874-8f54-449254f104ed",
+              "name": "language",
+              "value": "={{ JSON.parse($json.response).language }}",
+              "type": "string"
+            },
+            {
+              "id": "1be01a3b-1034-45de-9f24-378a54d8907a",
+              "name": "intent",
+              "value": "={{ JSON.parse($json.response).intent }}",
+              "type": "string"
+            },
+            {
+              "id": "e5214ce4-ea2e-4d92-a4c2-b7d898b55cca",
+              "name": "service_name",
+              "value": "={{ JSON.parse($json.response).service_name }}",
+              "type": "string"
+            },
+            {
+              "id": "86e4b564-b258-409c-bfe5-a13bb1415d2e",
+              "name": "requested_date",
+              "value": "={{ JSON.parse($json.response).requested_date }}",
+              "type": "string"
+            },
+            {
+              "id": "fec911c0-644a-48cb-9008-4ee9f9e56748",
+              "name": "requested_time",
+              "value": "={{ JSON.parse($json.response).requested_time }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "={{ false }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        736,
+        0
+      ],
+      "id": "9a357aa3-24a7-4056-a018-ec1bdfbdca56",
+      "name": "Parse AI Result"
+    }
+  ],
+  "pinData": {
+    "WhatsApp Trigger": [
+      {
+        "json": {
+          "metadata": {
+            "display_phone_number": "15551983886",
+            "phone_number_id": "1265135880021348"
+          },
+          "contacts": [
+            {
+              "profile": {
+                "name": "Shahin Test"
+              },
+              "wa_id": "218934374452"
+            }
+          ],
+          "messages": [
+            {
+              "id": "wamid.TEST_FRONTDESK_001",
+              "timestamp": "1786300000",
+              "from": "218934374452",
+              "type": "text",
+              "text": {
+                "body": "أريد حجز تنظيف أسنان غداً الساعة الثامنة مساءً"
+              }
+            }
+          ],
+          "field": "messages"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Save Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Customer": {
+      "main": [
+        [
+          {
+            "node": "Classify Intent - Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Intent - Ollama": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Booking": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Result": {
+      "main": [
+        [
+          {
+            "node": "Process Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "35b56788-8761-4934-ac12-8ed0ade08802",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2e9d04095fc9b2fcf7ebdabad98ec04162103e1e81327b57aa9ba0c4670029a0"
+  },
+  "nodeGroups": [],
+  "id": "mGEkWnlTJgBIrwbo",
+  "tags": []
+}
