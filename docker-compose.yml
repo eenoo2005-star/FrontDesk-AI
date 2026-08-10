@@ -1,0 +1,40 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.32.7
+    container_name: frontdesk-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      TZ: Africa/Tripoli
+      GENERIC_TIMEZONE: Africa/Tripoli
+      N8N_SECURE_COOKIE: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      WEBHOOK_URL: "${N8N_PUBLIC_URL}/"
+      N8N_PROXY_HOPS: "1"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17.10-alpine
+    container_name: frontdesk-postgres
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
+  postgres_data:
